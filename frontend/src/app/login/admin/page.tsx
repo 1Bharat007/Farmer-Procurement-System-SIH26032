@@ -52,6 +52,7 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setError(null);
 
+    // Client-side validation: required fields
     if (!username.trim() || !password.trim()) {
       setError(
         locale === "en"
@@ -63,12 +64,30 @@ export default function AdminLoginPage() {
 
     setLoading(true);
     try {
+      // 1. Authenticate via POST /api/auth/token/
       const res = await apiClient.auth.loginStaff({
         username: username.trim(),
         password: password.trim(),
       });
-      authStorage.saveTokens(res.tokens, res.user);
-      router.push("/admin");
+
+      // 2. Save tokens to localStorage
+      authStorage.saveTokens(res.tokens || res, res.user);
+
+      // 3. Confirm role and fetch profile details from GET /api/auth/me/
+      try {
+        const me = await apiClient.auth.getCurrentUser();
+        const mergedUser = {
+          ...res.user,
+          ...me,
+          centre_name: me?.profile?.centre_name || res.user?.centre_name,
+        };
+        authStorage.saveTokens(res.tokens || res, mergedUser);
+      } catch (profileErr) {
+        console.warn("Profile verification warning:", profileErr);
+      }
+
+      // 4. Redirect to /dashboard
+      router.push("/dashboard");
     } catch (err: any) {
       setError(
         err.message ||

@@ -218,14 +218,15 @@ class Command(BaseCommand):
             (time(14, 0), time(16, 0)),
         ]
 
+        # Span: 2 days in the past through 11 days in future (total 14 days)
+        # This provides realistic past slots (for completed/no-show), today (for live queue), and future (for booked)
         created_slots = []
+        slots_by_centre = {c.id: [] for c in created_centres}
+
         for centre in created_centres:
             slot_capacity = max(5, centre.daily_capacity // 4)
-            for day_offset in range(14):
+            for day_offset in range(-2, 12):
                 slot_date = today + timedelta(days=day_offset)
-                if slot_date.weekday() == 6:  # Sunday
-                    continue
-
                 for start_t, end_t in time_windows:
                     slot, _ = Slot.objects.update_or_create(
                         centre=centre,
@@ -238,103 +239,117 @@ class Command(BaseCommand):
                         }
                     )
                     created_slots.append(slot)
+                    slots_by_centre[centre.id].append(slot)
 
         self.stdout.write(f"   [OK] Generated {len(created_slots)} total slots across 14 operating days.")
 
         # ==========================================
         # 7. CREATE 40 REALISTIC BOOKINGS WITH STATUS MIX
         # ==========================================
-        self.stdout.write("7. Distributing 40 bookings across slots with diverse status values...")
-        status_targets = (
-            ['completed'] * 10 +
-            ['in_queue'] * 6 +
-            ['checked_in'] * 6 +
-            ['booked'] * 12 +
-            ['cancelled'] * 3 +
-            ['no_show'] * 3
-        )
+        self.stdout.write("7. Distributing 40 bookings evenly across all 3 centres with diverse status values...")
+        # 40 bookings distributed across 3 centres: Karnal (14), Ludhiana (13), Indore (13)
+        centre_status_distributions = [
+            # Karnal: 14 bookings
+            (created_centres[0], ['completed'] * 4 + ['in_queue'] * 2 + ['checked_in'] * 2 + ['booked'] * 4 + ['cancelled'] * 1 + ['no_show'] * 1),
+            # Ludhiana: 13 bookings
+            (created_centres[1], ['completed'] * 3 + ['in_queue'] * 2 + ['checked_in'] * 2 + ['booked'] * 4 + ['cancelled'] * 1 + ['no_show'] * 1),
+            # Indore: 13 bookings
+            (created_centres[2], ['completed'] * 3 + ['in_queue'] * 2 + ['checked_in'] * 2 + ['booked'] * 4 + ['cancelled'] * 1 + ['no_show'] * 1),
+        ]
+
+        # Map farmers by district for realistic local bookings
+        farmers_by_district = {
+            "Karnal": [f for f in created_farmers if f.district == "Karnal"],
+            "Ludhiana": [f for f in created_farmers if f.district == "Ludhiana"],
+            "Indore": [f for f in created_farmers if f.district == "Indore"],
+        }
+
         random.seed(42)
-
-        today_slots = [s for s in created_slots if s.date == today]
-        future_slots = [s for s in created_slots if s.date > today]
-        all_candidate_slots = today_slots + future_slots
-
-        if not today_slots:
-            today_slots = created_slots[:8]
-
         created_bookings = []
         token_counters = {}
 
-        for i, status_val in enumerate(status_targets):
-            farmer = created_farmers[i % len(created_farmers)]
+        for centre, statuses in centre_status_distributions:
+            c_slots = slots_by_centre[centre.id]
+            past_c_slots = [s for s in c_slots if s.date < today]
+            today_c_slots = [s for s in c_slots if s.date == today]
+            future_c_slots = [s for s in c_slots if s.date > today]
 
-            if status_val in ['checked_in', 'in_queue', 'completed']:
-                slot = today_slots[i % len(today_slots)]
-            elif status_val == 'booked':
-                slot = future_slots[i % len(future_slots)]
-            else:
-                slot = all_candidate_slots[i % len(all_candidate_slots)]
+            district_farmers = farmers_by_district.get(centre.district, created_farmers)
 
-            quantity = Decimal(random.randint(12, 45) * 100)  # 1200 to 4500 kg
+            for idx, status_val in enumerate(statuses):
+                farmer = district_farmers[idx % len(district_farmers)]
 
-            booking = Booking.objects.create(
-                farmer=farmer,
-                slot=slot,
-                status=status_val,
-                quantity_kg=quantity,
-                qr_code_token=uuid.uuid4(),
-                notes=f"Delivery batch for {farmer.crop_type} by {farmer.full_name}"
-            )
-            created_bookings.append(booking)
+                if status_val in ['checked_in', 'in_queue']:
+                    slot = today_c_slots[idx % len(today_c_slots)]
+                elif status_val == 'completed':
+                    slot = past_c_slots[idx % len(past_c_slots)]
+                elif status_val == 'no_show':
+                    slot = past_c_slots[(idx + 2) % len(past_c_slots)]
+                elif status_val == 'booked':
+                    slot = future_c_slots[idx % len(future_c_slots)]
+                else:  # cancelled
+                    slot = future_c_slots[(idx + 3) % len(future_c_slots)]
 
-            if status_val not in ['cancelled']:
-                slot.booked_count += 1
-                slot.save(update_fields=['booked_count'])
+                quantity = Decimal(random.randint(15, 45) * 100)  # 1500 to 4500 kg
 
-            # ==========================================
-            # 8. MATCHING PAYMENT STATUS FOR COMPLETED
-            # ==========================================
-            if status_val == 'completed':
-                msp_rate = Decimal("22.75")
-                payout_amount = (quantity * msp_rate).quantize(Decimal("0.01"))
-                PaymentStatus.objects.create(
-                    booking=booking,
-                    amount=payout_amount,
-                    status='completed',
-                    transaction_reference=f"DBT-PFMS-2026-{booking.id:05d}-{random.randint(1000, 9999)}",
-                    paid_at=timezone.now() - timedelta(hours=random.randint(1, 12))
+                booking = Booking.objects.create(
+                    farmer=farmer,
+                    slot=slot,
+                    status=status_val,
+                    quantity_kg=quantity,
+                    qr_code_token=uuid.uuid4(),
+                    notes=f"Intake batch of {farmer.crop_type} by {farmer.full_name} ({farmer.village})"
                 )
+                created_bookings.append(booking)
 
-            # ==========================================
-            # 9. MATCHING QUEUE TOKENS
-            # ==========================================
-            if status_val in ['checked_in', 'in_queue', 'completed']:
-                key = (slot.centre_id, slot.date)
-                token_counters[key] = token_counters.get(key, 0) + 1
-                token_num = token_counters[key]
+                if status_val not in ['cancelled']:
+                    slot.booked_count += 1
+                    slot.save(update_fields=['booked_count'])
 
+                # ==========================================
+                # 8. MATCHING PAYMENT STATUS FOR COMPLETED
+                # ==========================================
                 if status_val == 'completed':
-                    queue_status = 'completed'
-                    wait_time = 0
-                elif status_val == 'in_queue':
-                    queue_status = 'called'
-                    wait_time = 5
-                else:
-                    queue_status = 'waiting'
-                    wait_time = token_num * slot.centre.avg_processing_time_minutes
+                    msp_rate = Decimal("22.75")
+                    payout_amount = (quantity * msp_rate).quantize(Decimal("0.01"))
+                    PaymentStatus.objects.create(
+                        booking=booking,
+                        amount=payout_amount,
+                        status='completed',
+                        transaction_reference=f"DBT-PFMS-2026-{booking.id:05d}-{random.randint(1000, 9999)}",
+                        paid_at=timezone.now() - timedelta(days=1, hours=random.randint(1, 8))
+                    )
 
-                QueueToken.objects.create(
-                    booking=booking,
-                    centre=slot.centre,
-                    date=slot.date,
-                    token_number=token_num,
-                    status=queue_status,
-                    estimated_wait_minutes=wait_time,
-                    called_at=timezone.now() - timedelta(minutes=15) if queue_status in ['called', 'completed'] else None,
-                    served_at=timezone.now() - timedelta(minutes=5) if queue_status == 'completed' else None,
-                )
+                # ==========================================
+                # 9. MATCHING QUEUE TOKENS
+                # ==========================================
+                if status_val in ['checked_in', 'in_queue', 'completed']:
+                    key = (slot.centre_id, slot.date)
+                    token_counters[key] = token_counters.get(key, 0) + 1
+                    token_num = token_counters[key]
 
-        self.stdout.write(f"   [OK] Successfully created {len(created_bookings)} bookings.")
+                    if status_val == 'completed':
+                        queue_status = 'completed'
+                        wait_time = 0
+                    elif status_val == 'in_queue':
+                        queue_status = 'called'
+                        wait_time = 5
+                    else:
+                        queue_status = 'waiting'
+                        wait_time = token_num * slot.centre.avg_processing_time_minutes
+
+                    QueueToken.objects.create(
+                        booking=booking,
+                        centre=slot.centre,
+                        date=slot.date,
+                        token_number=token_num,
+                        status=queue_status,
+                        estimated_wait_minutes=wait_time,
+                        called_at=timezone.now() - timedelta(minutes=15) if queue_status in ['called', 'completed'] else None,
+                        served_at=timezone.now() - timedelta(minutes=5) if queue_status == 'completed' else None,
+                    )
+
+        self.stdout.write(f"   [OK] Successfully created {len(created_bookings)} bookings across all 3 centres.")
         self.stdout.write(f"   [OK] Created {PaymentStatus.objects.count()} matching DBT PaymentStatus records for completed bookings.")
         self.stdout.write(f"   [OK] Created {QueueToken.objects.count()} live QueueToken records.")
 

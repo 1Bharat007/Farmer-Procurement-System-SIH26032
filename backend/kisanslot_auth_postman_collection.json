@@ -1,0 +1,267 @@
+{
+  "info": {
+    "_postman_id": "8f2a91de-5a21-4f76-bc34-3685e13d9bb2",
+    "name": "KisanSlot Authentication APIs (SIH 2026)",
+    "description": "Postman collection demonstrating Farmer OTP auth and Centre Operator / Admin JWT auth flows.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Farmer Auth (OTP)",
+      "item": [
+        {
+          "name": "Send OTP (Existing Farmer)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone_number\": \"9800000001\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/farmer/send-otp/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "farmer", "send-otp", ""]
+            },
+            "description": "Generates a 6-digit OTP stored with 5-minute expiry. Rate limited to 3 attempts per 10 minutes."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify OTP & Login (Existing Farmer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.access) {",
+                  "    pm.environment.set(\"farmer_token\", jsonData.access);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone_number\": \"9800000001\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/farmer/verify-otp/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "farmer", "verify-otp", ""]
+            },
+            "description": "Verifies OTP and returns JWT tokens (access + refresh) and farmer profile payload."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify OTP & Register (New Farmer)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone_number\": \"9870000099\",\n  \"otp\": \"123456\",\n  \"full_name\": \"Santosh Patel\",\n  \"village\": \"Sihor\",\n  \"district\": \"Bhopal\",\n  \"state\": \"Madhya Pradesh\",\n  \"preferred_language\": \"hi\",\n  \"crop_type\": \"Soybean\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/farmer/verify-otp/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "farmer", "verify-otp", ""]
+            },
+            "description": "Verifies OTP and auto-creates a new Farmer profile, issuing JWT tokens."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Admin / Staff Auth (JWT)",
+      "item": [
+        {
+          "name": "Centre Operator Login (JWT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.access) {",
+                  "    pm.environment.set(\"operator_token\", jsonData.access);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"9811111111\",\n  \"password\": \"operator123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/token/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "token", ""]
+            },
+            "description": "Authenticates a Centre Operator and returns JWT access + refresh tokens."
+          },
+          "response": []
+        },
+        {
+          "name": "System Admin Login (JWT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.access) {",
+                  "    pm.environment.set(\"admin_token\", jsonData.access);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/token/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "token", ""]
+            },
+            "description": "Authenticates superuser admin."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Access Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/token/refresh/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "token", "refresh", ""]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Current User Role & Profile (/api/auth/me/)",
+      "item": [
+        {
+          "name": "Get Profile (Farmer)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{farmer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/me/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "me", ""]
+            },
+            "description": "Returns role: 'farmer' and village/district/state/crop data."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile (Centre Operator)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operator_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/me/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "me", ""]
+            },
+            "description": "Returns role: 'centre_operator' and assigned centre details."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/me/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "me", ""]
+            },
+            "description": "Returns role: 'admin'."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    }
+  ]
+}

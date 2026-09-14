@@ -145,7 +145,7 @@ class OTPRecord(models.Model):
         ordering = ['-created_at']
 
     def is_valid(self):
-        return not self.is_verified and (timezone.now() - self.created_at < timedelta(minutes=10))
+        return not self.is_verified and (timezone.now() - self.created_at < timedelta(minutes=5))
 
     def __str__(self):
         return f"OTP for {self.phone}: {self.otp_code} (Verified: {self.is_verified})"

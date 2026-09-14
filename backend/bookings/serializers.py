@@ -94,6 +94,9 @@ class BookingSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = ['id', 'qr_code_token', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'farmer': {'required': False},
+        }
 
     def create(self, validated_data):
         # Auto-increment slot booked count

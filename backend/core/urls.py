@@ -5,17 +5,22 @@ The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/5.1/topics/http/urls/
 """
 
+from datetime import datetime
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
     TokenVerifyView,
 )
-from datetime import datetime
+from accounts.views import (
+    CustomTokenObtainPairView,
+    SendFarmerOTPView,
+    VerifyFarmerOTPView,
+    AuthMeView,
+)
 
 
 @api_view(['GET'])
@@ -41,10 +46,13 @@ urlpatterns = [
     # Health Check
     path('api/health/', health_check, name='health-check'),
 
-    # JWT Authentication Endpoints
-    path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # Central Auth API Endpoints (/api/auth/...)
+    path('api/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    path('api/auth/farmer/send-otp/', SendFarmerOTPView.as_view(), name='auth_farmer_send_otp'),
+    path('api/auth/farmer/verify-otp/', VerifyFarmerOTPView.as_view(), name='auth_farmer_verify_otp'),
+    path('api/auth/me/', AuthMeView.as_view(), name='auth_me'),
 
     # Module API Routes
     path('api/accounts/', include('accounts.urls')),

@@ -39,9 +39,11 @@ export interface StaffUser {
   id: number;
   username: string;
   full_name: string;
-  email: string;
-  role: 'operator' | 'officer' | 'admin';
+  email?: string;
+  role: 'operator' | 'centre_operator' | 'officer' | 'admin';
   is_staff: boolean;
+  centre_id?: number;
+  centre_name?: string;
 }
 
 export interface SendOTPResponse {
@@ -91,14 +93,32 @@ export class ApiError extends Error {
 }
 
 // Token helper utilities for client side
+// Note on Security Tradeoff:
+// In this cross-origin Next.js client + Django ASGI backend architecture, JWT tokens are stored
+// in browser localStorage to permit dynamic Bearer token authorization headers.
+// In a unified production reverse-proxy environment, setting httpOnly and SameSite=Strict cookies
+// via a Next.js Route Handler or backend Set-Cookie header is strongly recommended to protect against
+// potential Cross-Site Scripting (XSS) risks.
+//
+// Middleware cookie note:
+// We also write lightweight ks_session + ks_role cookies (non-httpOnly, SameSite=Lax, 8h)
+// so the Next.js Edge Middleware can gate /farmer and /dashboard routes without reading
+// localStorage (which is unavailable at the edge).
 export const authStorage = {
-  saveTokens: (tokens: TokenResponse, user?: any) => {
+  saveTokens: (tokens: TokenResponse | any, user?: any) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('kisanslot_access_token', tokens.access);
-      localStorage.setItem('kisanslot_refresh_token', tokens.refresh);
+      const access = tokens?.access || tokens?.tokens?.access;
+      const refresh = tokens?.refresh || tokens?.tokens?.refresh;
+      if (access) localStorage.setItem('kisanslot_access_token', access);
+      if (refresh) localStorage.setItem('kisanslot_refresh_token', refresh);
       if (user) {
         localStorage.setItem('kisanslot_user', JSON.stringify(user));
       }
+      // Set session cookies for Edge Middleware route guard
+      const role: string = user?.role || 'farmer';
+      const expires = new Date(Date.now() + 8 * 60 * 60 * 1000).toUTCString();
+      document.cookie = `ks_session=1; path=/; SameSite=Lax; expires=${expires}`;
+      document.cookie = `ks_role=${role}; path=/; SameSite=Lax; expires=${expires}`;
     }
   },
   getAccessToken: (): string | null => {
@@ -119,6 +139,9 @@ export const authStorage = {
       localStorage.removeItem('kisanslot_access_token');
       localStorage.removeItem('kisanslot_refresh_token');
       localStorage.removeItem('kisanslot_user');
+      // Clear middleware cookies
+      document.cookie = 'ks_session=; path=/; max-age=0';
+      document.cookie = 'ks_role=; path=/; max-age=0';
     }
   },
 };
@@ -157,7 +180,13 @@ async function request<T>(
     if (!response.ok) {
       const msg =
         typeof data === 'object' && data !== null
-          ? data.message || data.detail || (data.phone ? data.phone[0] : null) || (data.otp ? data.otp[0] : null) || JSON.stringify(data)
+          ? data.message ||
+            data.detail ||
+            (data.phone ? data.phone[0] : null) ||
+            (data.phone_number ? data.phone_number[0] : null) ||
+            (data.otp ? data.otp[0] : null) ||
+            (data.non_field_errors ? data.non_field_errors[0] : null) ||
+            JSON.stringify(data)
           : String(data);
       throw new ApiError(
         msg || `API request failed with status ${response.status}`,
@@ -186,15 +215,24 @@ export const apiClient = {
   // Authentication & Accounts
   auth: {
     sendFarmerOTP: (phone: string) =>
-      request<SendOTPResponse>('/api/accounts/farmer/send-otp/', {
+      request<SendOTPResponse>('/api/auth/farmer/send-otp/', {
         method: 'POST',
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone_number: phone, phone }),
       }),
 
-    verifyFarmerOTP: (phone: string, otp: string) =>
-      request<AuthResponse<FarmerUser>>('/api/accounts/farmer/verify-otp/', {
+    verifyFarmerOTP: (
+      phone: string,
+      otp: string,
+      registrationData?: Partial<RegisterFarmerData>
+    ) =>
+      request<AuthResponse<FarmerUser>>('/api/auth/farmer/verify-otp/', {
         method: 'POST',
-        body: JSON.stringify({ phone, otp }),
+        body: JSON.stringify({
+          phone_number: phone,
+          phone,
+          otp,
+          ...(registrationData || {}),
+        }),
       }),
 
     registerFarmer: (data: RegisterFarmerData) =>
@@ -204,12 +242,12 @@ export const apiClient = {
       }),
 
     loginStaff: (credentials: { username: string; password: string }) =>
-      request<AuthResponse<StaffUser>>('/api/accounts/staff/login/', {
+      request<AuthResponse<StaffUser>>('/api/auth/token/', {
         method: 'POST',
         body: JSON.stringify(credentials),
       }),
 
-    getCurrentUser: () => request<any>('/api/accounts/me/'),
+    getCurrentUser: () => request<any>('/api/auth/me/'),
 
     refreshToken: (refreshToken: string) =>
       request<{ access: string }>('/api/auth/token/refresh/', {
@@ -218,19 +256,60 @@ export const apiClient = {
       }),
   },
 
-  // Modules Scaffolding
-  accounts: {
-    getRoot: () => request<ApiRootModuleResponse>('/api/accounts/'),
-  },
+  // Procurement Centres
   centres: {
-    getRoot: () => request<ApiRootModuleResponse>('/api/centres/'),
+    list: (params?: { district?: string; is_active?: boolean }) => {
+      const qs = new URLSearchParams();
+      if (params?.district) qs.set('district', params.district);
+      if (params?.is_active !== undefined) qs.set('is_active', String(params.is_active));
+      const q = qs.toString();
+      return request<any>(`/api/centres/${q ? '?' + q : ''}`);
+    },
+    retrieve: (id: number) => request<any>(`/api/centres/${id}/`),
   },
+
+  // Slots
+  slots: {
+    list: (params?: { centre?: number; date?: string; from_date?: string; to_date?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.centre) qs.set('centre', String(params.centre));
+      if (params?.date) qs.set('date', params.date);
+      if (params?.from_date) qs.set('from_date', params.from_date);
+      if (params?.to_date) qs.set('to_date', params.to_date);
+      const q = qs.toString();
+      return request<any>(`/api/bookings/slots/${q ? '?' + q : ''}`);
+    },
+  },
+
+  // Bookings
   bookings: {
-    getRoot: () => request<ApiRootModuleResponse>('/api/bookings/'),
+    list: () => request<any>('/api/bookings/'),
+    create: (data: { slot: number; quantity_kg?: number; notes?: string }) =>
+      request<any>('/api/bookings/', { method: 'POST', body: JSON.stringify(data) }),
+    retrieve: (id: number) => request<any>(`/api/bookings/${id}/`),
+    cancel: (id: number) =>
+      request<any>(`/api/bookings/${id}/cancel/`, { method: 'POST' }),
+    checkIn: (id: number) =>
+      request<any>(`/api/bookings/${id}/check-in/`, { method: 'POST' }),
+    checkInByQr: (qr_code_token: string) =>
+      request<any>('/api/bookings/check-in-qr/', {
+        method: 'POST',
+        body: JSON.stringify({ qr_code_token }),
+      }),
   },
+
+  // Queue
   queue: {
-    getRoot: () => request<ApiRootModuleResponse>('/api/queue/'),
+    list: (params?: { centre?: number; date?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.centre) qs.set('centre', String(params.centre));
+      if (params?.date) qs.set('date', params.date);
+      const q = qs.toString();
+      return request<any>(`/api/queue/${q ? '?' + q : ''}`);
+    },
   },
+
+  // Notifications
   notifications: {
     getRoot: () => request<ApiRootModuleResponse>('/api/notifications/'),
   },

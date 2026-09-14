@@ -95,7 +95,11 @@ export default function FarmerLoginPage() {
     setError(null);
     const cleanPhone = phone.trim().replace(/\D/g, "");
     if (cleanPhone.length !== 10) {
-      setError(locale === "en" ? "Please enter a valid 10-digit mobile number." : "कृपया वैध 10-अंकीय मोबाइल नंबर दर्ज करें।");
+      setError(
+        locale === "en"
+          ? "Please enter a valid 10-digit mobile number."
+          : "कृपया वैध 10-अंकीय मोबाइल नंबर दर्ज करें।"
+      );
       return;
     }
 
@@ -107,7 +111,18 @@ export default function FarmerLoginPage() {
         setDevOtpHint(res.dev_otp);
       }
     } catch (err: any) {
-      setError(err.message || (locale === "en" ? "Failed to send OTP. Please try again." : "ओटीपी भेजने में विफल। पुनः प्रयास करें।"));
+      let errorMsg =
+        err.message ||
+        (locale === "en"
+          ? "Failed to send OTP. Please try again."
+          : "ओटीपी भेजने में विफल। पुनः प्रयास करें।");
+      if (err.status === 429) {
+        errorMsg =
+          locale === "en"
+            ? "Rate limit exceeded. Maximum 3 OTP requests allowed per 10 minutes. Please wait before trying again."
+            : "ओटीपी अनुरोध सीमा समाप्त। 10 मिनट में अधिकतम 3 अनुरोध मान्य हैं। कृपया प्रतीक्षा करें।";
+      }
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -121,17 +136,45 @@ export default function FarmerLoginPage() {
     const cleanOtp = otp.trim();
 
     if (cleanOtp.length !== 6) {
-      setError(locale === "en" ? "Please enter the 6-digit OTP code." : "कृपया 6-अंकीय ओटीपी कोड दर्ज करें।");
+      setError(
+        locale === "en"
+          ? "Please enter the 6-digit OTP code."
+          : "कृपया 6-अंकीय ओटीपी कोड दर्ज करें।"
+      );
       return;
     }
 
     setLoading(true);
     try {
-      const res = await apiClient.auth.verifyFarmerOTP(cleanPhone, cleanOtp);
-      authStorage.saveTokens(res.tokens, res.user);
+      // Pass optional inline registration fields if available
+      const regPayload = regData.full_name
+        ? {
+            full_name: regData.full_name.trim(),
+            village: regData.village.trim(),
+            district: regData.district.trim(),
+            state: regData.state.trim(),
+            preferred_language: regData.preferred_language || locale,
+            crop_type: regData.crop_type || "Wheat",
+          }
+        : undefined;
+
+      const res = await apiClient.auth.verifyFarmerOTP(
+        cleanPhone,
+        cleanOtp,
+        regPayload
+      );
+      authStorage.saveTokens(res.tokens || res, res.user);
       router.push("/farmer");
     } catch (err: any) {
-      setError(err.message || (locale === "en" ? "Invalid or expired OTP." : "अमान्य या समाप्त ओटीपी।"));
+      let errorMsg =
+        err.message ||
+        (locale === "en"
+          ? "Invalid or expired OTP."
+          : "अमान्य या समाप्त ओटीपी।");
+      if (err.data?.detail) {
+        errorMsg = err.data.detail;
+      }
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -144,25 +187,46 @@ export default function FarmerLoginPage() {
     const cleanPhone = (regData.phone || phone).trim().replace(/\D/g, "");
 
     if (cleanPhone.length !== 10) {
-      setRegError(locale === "en" ? "Please enter a valid 10-digit mobile number." : "कृपया वैध 10-अंकीय मोबाइल नंबर दर्ज करें।");
+      setRegError(
+        locale === "en"
+          ? "Please enter a valid 10-digit mobile number."
+          : "कृपया वैध 10-अंकीय मोबाइल नंबर दर्ज करें।"
+      );
       return;
     }
     if (!regData.full_name.trim()) {
-      setRegError(locale === "en" ? "Please enter your full name." : "कृपया अपना पूरा नाम दर्ज करें।");
+      setRegError(
+        locale === "en"
+          ? "Please enter your full name."
+          : "कृपया अपना पूरा नाम दर्ज करें।"
+      );
       return;
     }
 
     setRegLoading(true);
     try {
-      const res = await apiClient.auth.registerFarmer({
-        ...regData,
-        phone: cleanPhone,
-        preferred_language: locale,
-      });
-      authStorage.saveTokens(res.tokens, res.user);
-      router.push("/farmer");
+      // 1. Send OTP to the farmer's mobile number
+      const res = await apiClient.auth.sendFarmerOTP(cleanPhone);
+      setPhone(cleanPhone);
+      setOtpSent(true);
+      if (res.dev_otp) {
+        setDevOtpHint(res.dev_otp);
+      }
+      // 2. Transition back to OTP verification view with registration fields preserved for the verify-otp call
+      setShowRegister(false);
     } catch (err: any) {
-      setRegError(err.message || (locale === "en" ? "Registration failed." : "पंजीकरण विफल रहा।"));
+      let errorMsg =
+        err.message ||
+        (locale === "en"
+          ? "Failed to send OTP. Please try again."
+          : "ओटीपी भेजने में विफल। पुनः प्रयास करें।");
+      if (err.status === 429) {
+        errorMsg =
+          locale === "en"
+            ? "Rate limit exceeded. Maximum 3 OTP requests allowed per 10 minutes. Please wait before trying again."
+            : "ओटीपी अनुरोध सीमा समाप्त। 10 मिनट में अधिकतम 3 अनुरोध मान्य हैं। कृपया प्रतीक्षा करें।";
+      }
+      setRegError(errorMsg);
     } finally {
       setRegLoading(false);
     }

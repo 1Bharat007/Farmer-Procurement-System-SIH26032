@@ -243,3 +243,19 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+# In local development without Redis daemon, execute tasks synchronously
+CELERY_TASK_ALWAYS_EAGER = config('CELERY_ALWAYS_EAGER', default=True, cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = False
+
+# Periodic Celery Beat Tasks
+CELERY_BEAT_SCHEDULE = {
+    'send-hourly-slot-reminders': {
+        'task': 'notifications.tasks.send_slot_reminders',
+        'schedule': 300.0,  # runs every 5 minutes checking for upcoming slots
+    },
+}
+
+# Fast2SMS Gateway Configuration
+FAST2SMS_API_KEY = config('FAST2SMS_API_KEY', default='')
+FAST2SMS_SENDER_ID = config('FAST2SMS_SENDER_ID', default='FSTSMS')
+
