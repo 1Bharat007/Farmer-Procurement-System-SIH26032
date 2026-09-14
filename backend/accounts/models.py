@@ -58,7 +58,19 @@ class Farmer(AbstractBaseUser, PermissionsMixin):
     village = models.CharField(max_length=100, blank=True, default='')
     district = models.CharField(max_length=100, blank=True, default='')
     state = models.CharField(max_length=100, blank=True, default='')
-    preferred_language = models.CharField(max_length=10, default='hi')
+    LANGUAGE_CHOICES = [
+        ('en', 'English'),
+        ('hi', 'Hindi'),
+        ('pa', 'Punjabi'),
+    ]
+
+    preferred_language = models.CharField(
+        max_length=10,
+        choices=LANGUAGE_CHOICES,
+        default='hi',
+        help_text="Preferred language for SMS notifications and UI"
+    )
+
     crop_type = models.CharField(max_length=100, default='Wheat')
 
     is_staff = models.BooleanField(default=False)

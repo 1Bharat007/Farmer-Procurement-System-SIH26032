@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, UserCheck, Shield } from "lucide-react";
 
 export default function LandingPage() {
-  const [locale, setLocale] = React.useState<"en" | "hi">("en");
+  const [locale, setLocale] = React.useState<"en" | "hi" | "pa">("en");
 
   const content = {
     en: {
@@ -39,12 +39,26 @@ export default function LandingPage() {
       adminBtn: "कर्मचारी लॉगिन",
       footer: "स्मार्ट इंडिया हैकथॉन 2026 • समस्या विवरण 26032",
     },
+    pa: {
+      appName: "ਕਿਸਾਨਸਲਾਟ",
+      ministry: "ਖਪਤਕਾਰ ਮਾਮਲੇ, ਭੋਜਨ ਅਤੇ ਜਨਤਕ ਵੰਡ ਮੰਤਰਾਲਾ",
+      headline: "ਕਿਸਾਨ ਅਨਾਜ ਖਰੀਦ ਅਤੇ ਲਾਈਵ ਕਤਾਰ ਪ੍ਰਬੰਧਨ",
+      subheadline:
+        "ਨੇੜੇ ਦੇ ਖਰੀਦ ਕੇਂਦਰ ਵਿੱਚ ਅਨਾਜ ਵੰਡਣ ਲਈ ਸਮਾਂ ਸਲਾਟ ਬੁੱਕ ਕਰੋ ਅਤੇ ਅਸਲ-ਸਮੇਂ ਕਤਾਰ ਸਥਿਤੀ ਦੇਖੋ।",
+      farmerTitle: "ਕਿਸਾਨ ਲੌਗਇਨ",
+      farmerDesc: "ਸਲਾਟ ਬੁਕਿੰਗ ਅਤੇ ਲਾਈਵ ਟੋਕਨ ਟਰੈਕਿੰਗ ਲਈ ਆਪਣਾ ਮੋਬਾਈਲ ਨੰਬਰ ਦਾਖਲ ਕਰੋ।",
+      farmerBtn: "ਕਿਸਾਨ ਲੌਗਇਨ",
+      adminTitle: "ਕੇਂਦਰ ਕਰਮਚਾਰੀ ਲੌਗਇਨ",
+      adminDesc: "ਵੇਬ੍ਰਿਜ ਓਪਰੇਟਰਾਂ, ਗੁਣਵੱਤਾ ਨਿਰੀਖਕਾਂ ਅਤੇ ਕੇਂਦਰ ਪ੍ਰਬੰਧਕਾਂ ਲਈ ਪੋਰਟਲ।",
+      adminBtn: "ਕਰਮਚਾਰੀ ਲੌਗਇਨ",
+      footer: "ਸਮਾਰਟ ਇੰਡੀਆ ਹੈਕਾਥੌਨ 2026 • ਸਮੱਸਿਆ ਵੇਰਵਾ 26032",
+    },
   };
 
   const t = content[locale];
 
   return (
-    <div className="min-h-screen bg-white text-[#202124] flex flex-col justify-between font-sans">
+    <div className={`min-h-screen bg-white text-[#202124] flex flex-col justify-between font-sans${locale === "pa" ? " font-gurmukhi" : ""}`}>
       {/* Top Bar */}
       <header className="border-b border-[#DADCE0] bg-white sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">

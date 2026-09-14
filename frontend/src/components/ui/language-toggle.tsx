@@ -3,9 +3,11 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+export type Locale = "en" | "hi" | "pa";
+
 export interface LanguageToggleProps {
-  currentLocale?: "en" | "hi";
-  onLocaleChange?: (locale: "en" | "hi") => void;
+  currentLocale?: Locale;
+  onLocaleChange?: (locale: Locale) => void;
   className?: string;
 }
 
@@ -14,14 +16,20 @@ export function LanguageToggle({
   onLocaleChange,
   className,
 }: LanguageToggleProps) {
-  const [selected, setSelected] = React.useState<"en" | "hi">(currentLocale);
+  const [selected, setSelected] = React.useState<Locale>(currentLocale);
 
-  const handleSelect = (locale: "en" | "hi") => {
+  const handleSelect = (locale: Locale) => {
     setSelected(locale);
     if (onLocaleChange) {
       onLocaleChange(locale);
     }
   };
+
+  const options: { locale: Locale; label: string }[] = [
+    { locale: "en", label: "EN" },
+    { locale: "hi", label: "हिं" },
+    { locale: "pa", label: "ਪੰ" },
+  ];
 
   return (
     <div
@@ -32,32 +40,22 @@ export function LanguageToggle({
         className
       )}
     >
-      <button
-        type="button"
-        onClick={() => handleSelect("en")}
-        aria-pressed={selected === "en"}
-        className={cn(
-          "rounded-full px-2.5 py-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0B3D91]",
-          selected === "en"
-            ? "bg-[#0B3D91] text-white"
-            : "text-[#5F6368] hover:text-[#202124] hover:bg-[#F8F9FA]"
-        )}
-      >
-        English
-      </button>
-      <button
-        type="button"
-        onClick={() => handleSelect("hi")}
-        aria-pressed={selected === "hi"}
-        className={cn(
-          "rounded-full px-2.5 py-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0B3D91]",
-          selected === "hi"
-            ? "bg-[#0B3D91] text-white"
-            : "text-[#5F6368] hover:text-[#202124] hover:bg-[#F8F9FA]"
-        )}
-      >
-        हिंदी
-      </button>
+      {options.map(({ locale, label }) => (
+        <button
+          key={locale}
+          type="button"
+          onClick={() => handleSelect(locale)}
+          aria-pressed={selected === locale}
+          className={cn(
+            "rounded-full px-2.5 py-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0B3D91]",
+            selected === locale
+              ? "bg-[#0B3D91] text-white"
+              : "text-[#5F6368] hover:text-[#202124] hover:bg-[#F8F9FA]"
+          )}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }

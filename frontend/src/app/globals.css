@@ -41,3 +41,14 @@
     outline-offset: 2px;
   }
 }
+
+/**
+ * Gurmukhi font override — applied only when locale is 'pa'.
+ * Roboto lacks Gurmukhi glyphs; without this class Punjabi text
+ * renders as boxes. Noto Sans Gurmukhi covers the full Unicode
+ * Gurmukhi block (U+0A00–U+0A7F).
+ */
+.font-gurmukhi,
+.font-gurmukhi * {
+  font-family: var(--font-noto-gurmukhi), "Noto Sans Gurmukhi", var(--font-roboto), Roboto, sans-serif;
+}
