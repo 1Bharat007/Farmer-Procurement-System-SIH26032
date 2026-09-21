@@ -1,4 +1,4 @@
-# 🌾 KisanSlot / FarmQueue — Farmer Procurement Queue & Slot Management Platform
+#  KisanSlot / FarmQueue — Farmer Procurement Queue & Slot Management Platform
 
 > **Smart India Hackathon 2026**  
 > **Problem Statement ID**: 26032  
@@ -7,7 +7,7 @@
 
 ---
 
-## 📌 Overview
+##  Overview
 
 **KisanSlot** is an enterprise-grade digital procurement queue and slot scheduling platform engineered to eliminate chaotic physical queues, long waiting times, and crop distress sales at Minimum Support Price (MSP) grain procurement centres across India.
 
@@ -20,7 +20,7 @@
 
 ---
 
-## 🏗️ Architecture & Technology Stack
+##  Architecture & Technology Stack
 
 ```
 +-----------------------------------------------------------------------+
@@ -48,7 +48,7 @@
 +-----------------------------------------------------------------------+
 ```
 
-### 🔹 Backend (`/backend`)
+### Backend (`/backend`)
 - **Framework**: Django 5.1.x with Daphne ASGI server
 - **REST & Auth**: Django REST Framework (DRF) + `djangorestframework-simplejwt`
 - **Real-time WebSockets**: Django Channels with Redis Channel Layer (`channels-redis`)
@@ -65,7 +65,7 @@
 
 ---
 
-### 🔹 Frontend (`/frontend`)
+###  Frontend (`/frontend`)
 - **Framework**: Next.js 15 (App Router) + TypeScript + React 19
 - **Styling & UI**: Tailwind CSS + shadcn/ui component architecture
 - **Internationalization**: `next-intl` (English `en` & Hindi `hi`)
@@ -76,7 +76,7 @@
 
 ---
 
-## 📁 Repository Structure
+##  Repository Structure
 
 ```
 .
@@ -117,7 +117,7 @@
 
 ---
 
-## 🚀 Quick Start (Run with One Command)
+## Quick Start (Run with One Command)
 
 ### Prerequisites
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (with Docker Compose v2+)
@@ -136,7 +136,7 @@ docker-compose up --build
 
 ---
 
-## 🌐 Service URLs & Access Points
+## Service URLs & Access Points
 
 | Service | URL | Description |
 |---|---|---|
@@ -151,7 +151,7 @@ docker-compose up --build
 
 ---
 
-## 🛠️ Local Development (Without Docker)
+##  Local Development (Without Docker)
 
 ### Backend Setup
 ```bash
@@ -176,7 +176,7 @@ npm run dev
 
 ---
 
-## 🔒 Security & Environment Variables
+## Security & Environment Variables
 
 Key environment variables in `.env`:
 - `SECRET_KEY`: Django secret key
@@ -188,7 +188,7 @@ Key environment variables in `.env`:
 
 ---
 
-## 👥 SIH 2026 Team & Submission
+##  SIH 2026 Team & Submission
 - **Platform**: KisanSlot Procurement System
 - **Problem Statement**: 26032
 - **Ministry**: Ministry of Consumer Affairs, Food & Public Distribution
