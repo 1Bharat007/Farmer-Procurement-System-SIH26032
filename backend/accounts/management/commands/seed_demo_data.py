@@ -152,6 +152,23 @@ class Command(BaseCommand):
                 defaults={"centre": karnal_centre, "badge_number": "KNL-OP-01", "is_active": True},
             )
 
+            # Harish Chander (Standard test/demo operator @ Karnal)
+            op_harish, _ = Farmer.objects.update_or_create(
+                phone_number="9811111111",
+                defaults={
+                    "full_name": "Harish Chander (Karnal Mandi)",
+                    "is_staff": True,
+                    "district": "Karnal",
+                    "state": "Haryana",
+                },
+            )
+            op_harish.set_password("operator123")
+            op_harish.save()
+            CentreOperator.objects.update_or_create(
+                user=op_harish,
+                defaults={"centre": karnal_centre, "badge_number": "KNL-OP-01", "is_active": True},
+            )
+
             # Panipat Operator
             panipat_centre = created_centres[1]
             op2, _ = Farmer.objects.update_or_create(
