@@ -7,12 +7,12 @@ import { apiClient, authStorage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { LanguageToggle } from "@/components/ui/language-toggle";
+import { LanguageToggle, Locale } from "@/components/ui/language-toggle";
 import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [locale, setLocale] = React.useState<"en" | "hi">("en");
+  const [locale, setLocale] = React.useState<Locale>("en");
 
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -46,7 +46,7 @@ export default function AdminLoginPage() {
       demoHint: "डेमो स्टाफ क्रेडेंशियल्स: यूज़रनेम: admin / पासवर्ड: admin123",
       footer: "उपभोक्ता मामले, खाद्य एवं सार्वजनिक वितरण मंत्रालय • SIH 2026",
     },
-  }[locale];
+  }[locale === "pa" ? "hi" : locale];
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -7,12 +7,12 @@ import { apiClient, authStorage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { LanguageToggle } from "@/components/ui/language-toggle";
+import { LanguageToggle, Locale } from "@/components/ui/language-toggle";
 import { ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 
 export default function FarmerLoginPage() {
   const router = useRouter();
-  const [locale, setLocale] = React.useState<"en" | "hi">("en");
+  const [locale, setLocale] = React.useState<Locale>("en");
 
   // Login form states
   const [phone, setPhone] = React.useState("");
@@ -87,7 +87,7 @@ export default function FarmerLoginPage() {
       cropLabel: "मुख्य फसल का प्रकार",
       registerBtn: "पंजीकरण पूर्ण कर लॉगिन करें",
     },
-  }[locale];
+  }[locale === "pa" ? "hi" : locale];
 
   // Send OTP handler
   const handleSendOtp = async (e: React.FormEvent) => {
