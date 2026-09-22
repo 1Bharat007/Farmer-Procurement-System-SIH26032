@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 
 export default function StyleGuidePage() {
-  const [currentLocale, setCurrentLocale] = React.useState<"en" | "hi">("en");
+  const [currentLocale, setCurrentLocale] = React.useState<"en" | "hi" | "pa">("en");
   const [inputValue, setInputValue] = React.useState("Kisan Registration No: 8849201");
   const [inputError, setInputError] = React.useState("987654321");
 
@@ -477,7 +477,7 @@ export default function StyleGuidePage() {
             <CardContent className="pt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="text-[14px] font-medium text-[#202124]">
-                  Active Language: {currentLocale === "en" ? "English (en-IN)" : "हिंदी (hi-IN)"}
+                  Active Language: {currentLocale === "en" ? "English (en-IN)" : currentLocale === "pa" ? "ਪੰਜਾਬੀ (pa-IN)" : "हिंदी (hi-IN)"}
                 </div>
                 <div className="text-[12px] text-[#5F6368] mt-0.5">
                   Synchronized with <code className="text-[#0B3D91]">next-intl</code> translation catalogs.

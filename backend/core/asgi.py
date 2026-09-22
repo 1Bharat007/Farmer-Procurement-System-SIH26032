@@ -17,12 +17,13 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 # is populated before importing code that may import ORM models.
 django_asgi_app = get_asgi_application()
 
+import queue_app.routing
+
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
-    # WebSocket routing will be added here as consumers are created
     "websocket": AuthMiddlewareStack(
-        URLRouter([
-            # app websocket routing patterns
-        ])
+        URLRouter(
+            queue_app.routing.websocket_urlpatterns
+        )
     ),
 })

@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
-import { apiClient, authStorage } from "@/lib/api";
+import { apiClient, authStorage, getFriendlyErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -165,6 +165,7 @@ export default function FarmerPortalPage() {
   const [bookings, setBookings] = React.useState<Booking[]>([]);
   const [bookingsLoading, setBookingsLoading] = React.useState(false);
   const [bookingsError, setBookingsError] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
   const [cancellingId, setCancellingId] = React.useState<number | null>(null);
 
   // Booking Wizard state
@@ -206,7 +207,7 @@ export default function FarmerPortalPage() {
       const list = Array.isArray(res) ? res : res?.results || res?.data || [];
       setBookings(list);
     } catch (err: any) {
-      setBookingsError(err.message || "Failed to load bookings.");
+      setBookingsError(getFriendlyErrorMessage(err, "Failed to load bookings."));
     } finally {
       setBookingsLoading(false);
     }
@@ -226,7 +227,7 @@ export default function FarmerPortalPage() {
       const list = Array.isArray(res) ? res : res?.results || res?.data || [];
       setCentres(list);
     } catch (err: any) {
-      setCentresError(err.message || "Failed to load procurement centres.");
+      setCentresError(getFriendlyErrorMessage(err, "Failed to load procurement centres."));
     } finally {
       setCentresLoading(false);
     }
@@ -250,7 +251,7 @@ export default function FarmerPortalPage() {
       const list: Slot[] = Array.isArray(res) ? res : res?.results || res?.data || [];
       setSlots(list);
     } catch (err: any) {
-      setSlotsError(err.message || "Failed to load slots.");
+      setSlotsError(getFriendlyErrorMessage(err, "Failed to load available slots."));
     } finally {
       setSlotsLoading(false);
     }
@@ -292,13 +293,14 @@ export default function FarmerPortalPage() {
       if (
         errorText.includes("maximum capacity") ||
         errorText.includes("capacity") ||
-        errorText.includes("full")
+        errorText.includes("full") ||
+        errorText.includes("no longer available")
       ) {
         setBookingError("This slot just filled up, please pick another.");
         // Refresh slots list to reflect current capacities
         loadSlots();
       } else {
-        setBookingError(err.message || "Failed to confirm booking. Please try again.");
+        setBookingError(getFriendlyErrorMessage(err, "Failed to confirm booking. Please try again."));
       }
     } finally {
       setBookingLoading(false);
@@ -307,11 +309,12 @@ export default function FarmerPortalPage() {
 
   const handleCancelBooking = async (id: number) => {
     setCancellingId(id);
+    setActionError(null);
     try {
       await apiClient.bookings.cancel(id);
       await loadBookings();
     } catch (err: any) {
-      alert(err.message || "Failed to cancel booking.");
+      setActionError(getFriendlyErrorMessage(err, "Failed to cancel booking. Please try again."));
     } finally {
       setCancellingId(null);
     }
@@ -416,6 +419,22 @@ export default function FarmerPortalPage() {
 
       {/* Main Content Area */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full space-y-6">
+        {/* In-page Action Error Banner */}
+        {actionError && (
+          <div className="p-3 bg-[#FCE8E6] border border-[#FAD2CF] rounded-[4px] flex items-center justify-between text-[13px] text-[#C5221F]">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{actionError}</span>
+            </div>
+            <button
+              onClick={() => setActionError(null)}
+              className="text-[#C5221F] hover:text-[#202124] text-[12px] font-medium ml-3"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* PANEL 1: OVERVIEW */}
         {activePanel === "home" && (
           <>

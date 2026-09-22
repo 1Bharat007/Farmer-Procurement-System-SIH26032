@@ -1,5 +1,6 @@
 import logging
-from rest_framework import viewsets, permissions, status
+from django.db import transaction, DatabaseError, OperationalError
+from rest_framework import viewsets, permissions, status, exceptions
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -7,8 +8,9 @@ from django.utils import timezone
 from .models import Slot, Booking, PaymentStatus
 from .serializers import SlotSerializer, BookingSerializer, PaymentStatusSerializer
 from accounts.permissions import IsOwnerOrCentreOperatorOrAdmin, IsAdminOrReadOnly
+from core.throttling import BookingRateThrottle
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('bookings')
 
 
 class BookingsRootView(APIView):
@@ -74,21 +76,65 @@ class BookingViewSet(viewsets.ModelViewSet):
             'farmer', 'slot', 'slot__centre', 'payment', 'queue_token'
         )
 
+    def get_throttles(self):
+        if self.action == 'create':
+            return [BookingRateThrottle()]
+        return super().get_throttles()
+
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except (OperationalError, DatabaseError) as exc:
+            logger.warning(f"Concurrent booking conflict detected: {exc}")
+            return Response(
+                {"error": "This slot is no longer available or is currently being booked. Please try another slot."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
     def perform_create(self, serializer):
         user = self.request.user
-        # If user is farmer or operator booking on farmer's behalf
         farmer = serializer.validated_data.get('farmer')
-        if not farmer or not user.is_staff:
-            booking = serializer.save(farmer=user)
-        else:
-            booking = serializer.save()
+        slot = serializer.validated_data.get('slot')
+        slot_id = slot.id if slot else self.request.data.get('slot')
 
-        # Trigger async confirmation SMS via Celery
+        with transaction.atomic():
+            if slot_id:
+                try:
+                    locked_slot = Slot.objects.select_for_update().get(pk=slot_id)
+                except Slot.DoesNotExist:
+                    raise exceptions.ValidationError({"slot": "Invalid slot specified."})
+
+                if locked_slot.booked_count >= locked_slot.capacity:
+                    raise exceptions.ValidationError({
+                        "slot": "This slot is fully booked and no longer available. Please choose another slot."
+                    })
+
+                locked_slot.booked_count += 1
+                locked_slot.save(update_fields=['booked_count'])
+                serializer.validated_data['slot'] = locked_slot
+
+            if not farmer or not user.is_staff:
+                booking = serializer.save(farmer=user)
+            else:
+                booking = serializer.save()
+
+        logger.info(
+            f"[BOOKING CREATED] Booking #{booking.id} created for farmer {booking.farmer.phone_number} "
+            f"at centre {booking.slot.centre.name} (Slot: {booking.slot.date} "
+            f"{booking.slot.start_time.strftime('%I:%M %p')}-{booking.slot.end_time.strftime('%I:%M %p')}, "
+            f"Qty: {booking.quantity_kg}kg)"
+        )
+
+        # Trigger async confirmation SMS via Celery (isolated with graceful degradation)
         try:
             from notifications.tasks import send_booking_confirmation_sms
             send_booking_confirmation_sms.delay(booking.id)
+            logger.info(f"[SMS QUEUED] Confirmation SMS task queued for Booking #{booking.id}")
         except Exception as exc:
-            logger.warning(f"Could not dispatch confirmation SMS for Booking #{booking.id}: {exc}")
+            # Graceful degradation: never fail booking creation if Celery/Redis queueing fails
+            logger.warning(
+                f"[CELERY/REDIS DEGRADED] Could not dispatch confirmation SMS for Booking #{booking.id}: {exc}"
+            )
 
     @action(detail=False, methods=['post'], url_path='check-in-qr')
     def check_in_by_qr(self, request):
@@ -191,6 +237,12 @@ class BookingViewSet(viewsets.ModelViewSet):
         except Exception as exc:
             logger.warning(f"Queue broadcast error: {exc}")
 
+        # Structured logging for QR check-in
+        logger.info(
+            f"[CHECK-IN QR] Farmer {booking.farmer.phone_number} checked in for Booking #{booking.id} "
+            f"with Token #{queue_token.token_number} at {booking.slot.centre.name}"
+        )
+
         return Response({
             "status": "success",
             "message": f"Farmer {booking.farmer.full_name} checked in successfully.",
@@ -236,6 +288,32 @@ class BookingViewSet(viewsets.ModelViewSet):
             }
         )
 
+        # Trigger queue broadcast
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                async_to_sync(channel_layer.group_send)(
+                    f"queue_{booking.slot.centre_id}",
+                    {
+                        "type": "queue.update",
+                        "message": {
+                            "event": "farmer_checked_in",
+                            "booking_id": booking.id,
+                            "farmer_name": booking.farmer.full_name,
+                            "token_number": token.token_number,
+                        }
+                    }
+                )
+        except Exception as exc:
+            logger.warning(f"Queue broadcast error: {exc}")
+
+        logger.info(
+            f"[CHECK-IN MANUAL] Farmer {booking.farmer.phone_number} checked in for Booking #{booking.id} "
+            f"with Token #{token.token_number} at {booking.slot.centre.name}"
+        )
+
         return Response({
             "status": "success",
             "message": "Farmer checked in successfully.",
@@ -246,21 +324,36 @@ class BookingViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='cancel')
     def cancel_booking(self, request, pk=None):
         """
-        Cancel a booking and release slot capacity.
+        Cancel a booking and release slot capacity atomically.
         """
-        booking = self.get_object()
-        if booking.status in ['completed', 'cancelled']:
-            return Response(
-                {"error": f"Cannot cancel booking with status '{booking.status}'."},
-                status=status.HTTP_400_BAD_REQUEST
+        with transaction.atomic():
+            booking = Booking.objects.select_for_update().filter(pk=pk).first()
+            if not booking:
+                return Response(
+                    {"error": "Booking not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            self.check_object_permissions(request, booking)
+
+            if booking.status in ['completed', 'cancelled']:
+                return Response(
+                    {"error": f"Cannot cancel booking with status '{booking.status}'."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            booking.status = 'cancelled'
+            booking.save(update_fields=['status', 'updated_at'])
+
+            locked_slot = Slot.objects.select_for_update().filter(pk=booking.slot_id).first()
+            if locked_slot and locked_slot.booked_count > 0:
+                locked_slot.booked_count -= 1
+                locked_slot.save(update_fields=['booked_count'])
+
+            logger.info(
+                f"[BOOKING CANCELLED] Booking #{booking.id} cancelled by user {request.user.phone_number}. "
+                f"Released capacity for Slot #{booking.slot_id}."
             )
-
-        booking.status = 'cancelled'
-        booking.save(update_fields=['status', 'updated_at'])
-
-        if booking.slot.booked_count > 0:
-            booking.slot.booked_count -= 1
-            booking.slot.save(update_fields=['booked_count'])
 
         return Response({
             "status": "success",

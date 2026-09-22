@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiClient, authStorage } from "@/lib/api";
+import { apiClient, authStorage, getFriendlyErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [locale, setLocale] = React.useState<"en" | "hi">("en");
+  const [locale, setLocale] = React.useState<"en" | "hi" | "pa">("en");
 
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -45,6 +45,19 @@ export default function AdminLoginPage() {
       submitBtn: "प्रशासनिक कंसोल में साइन इन करें",
       demoHint: "डेमो स्टाफ क्रेडेंशियल्स: यूज़रनेम: admin / पासवर्ड: admin123",
       footer: "उपभोक्ता मामले, खाद्य एवं सार्वजनिक वितरण मंत्रालय • SIH 2026",
+    },
+    pa: {
+      appName: "ਕਿਸਾਨਸਲਾਟ",
+      backHome: "ਮੁੱਖ ਪੰਨੇ 'ਤੇ ਵਾਪਸ ਜਾਓ",
+      title: "ਕੇਂਦਰ ਸਟਾਫ਼ ਅਤੇ ਅਧਿਕਾਰੀ ਲੌਗਇਨ",
+      subtitle: "ਆਪਣੇ ਸਰਕਾਰੀ ਖਰੀਦ ਆਪਰੇਟਰ ਜਾਂ ਪ੍ਰਸ਼ਾਸਕੀ ਪਛਾਣ ਨਾਲ ਸਾਈਨ ਇਨ ਕਰੋ।",
+      usernameLabel: "ਯੂਜ਼ਰਨਾਮ / ਸਟਾਫ਼ ਆਈਡੀ",
+      usernamePlaceholder: "ਜਿਵੇਂ admin ਜਾਂ operator_karnal",
+      passwordLabel: "ਪਾਸਵਰਡ",
+      passwordPlaceholder: "ਆਪਣਾ ਪਾਸਵਰਡ ਦਰਜ ਕਰੋ",
+      submitBtn: "ਪ੍ਰਸ਼ਾਸਕੀ ਕੰਸੋਲ ਵਿੱਚ ਸਾਈਨ ਇਨ ਕਰੋ",
+      demoHint: "ਡੈਮੋ ਸਟਾਫ਼ ਵੇਰਵੇ: ਯੂਜ਼ਰਨਾਮ: admin / ਪਾਸਵਰਡ: admin123",
+      footer: "ਖਪਤਕਾਰ ਮਾਮਲੇ, ਖੁਰਾਕ ਅਤੇ ਜਨਤਕ ਵੰਡ ਮੰਤਰਾਲਾ • SIH 2026",
     },
   }[locale];
 
@@ -89,12 +102,28 @@ export default function AdminLoginPage() {
       // 4. Redirect to /dashboard
       router.push("/dashboard");
     } catch (err: any) {
-      setError(
-        err.message ||
-          (locale === "en"
-            ? "Invalid username or password."
-            : "अमान्य उपयोगकर्ता नाम या पासवर्ड।")
-      );
+      if (err.isNetworkError) {
+        setError(
+          locale === "en"
+            ? "No network connection. Please check your internet connection and try again."
+            : "कोई इंटरनेट कनेक्शन नहीं है। कृपया अपना नेटवर्क जांचें।"
+        );
+      } else if (err.status === 429) {
+        setError(
+          locale === "en"
+            ? "Too many login attempts. Please wait a minute before trying again."
+            : "लॉगिन प्रयासों की सीमा समाप्त। कृपया एक मिनट बाद पुनः प्रयास करें।"
+        );
+      } else {
+        setError(
+          getFriendlyErrorMessage(
+            err,
+            locale === "en"
+              ? "Invalid username or password."
+              : "अमान्य उपयोगकर्ता नाम या पासवर्ड।"
+          )
+        );
+      }
     } finally {
       setLoading(false);
     }

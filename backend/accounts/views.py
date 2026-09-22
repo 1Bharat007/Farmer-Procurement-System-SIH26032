@@ -21,8 +21,9 @@ from .serializers import (
     CustomTokenObtainPairSerializer,
 )
 from .permissions import IsOwnerOrCentreOperatorOrAdmin, IsCentreOperator
+from core.throttling import OTPRateThrottle, LoginRateThrottle
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('accounts')
 
 
 def get_tokens_for_user(user):
@@ -38,8 +39,10 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     """
     POST /api/auth/token/
     Obtains JWT token pair for Centre Operators, Officers, and Admins using username/password or phone_number/password.
+    Protected against brute-force attacks with LoginRateThrottle.
     """
     serializer_class = CustomTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
 
 
 class FarmerViewSet(viewsets.ModelViewSet):
@@ -88,9 +91,10 @@ class SendFarmerOTPView(APIView):
     """
     Endpoint: POST /api/auth/farmer/send-otp/ & /api/accounts/farmer/send-otp/
     Accepts phone_number (or phone), generates a 6-digit OTP with a 5-minute expiry,
-    enforces rate limiting (max 3 requests per 10 minutes), and logs clearly to the console.
+    enforces multi-tier rate limiting (DRF IP/Phone throttle + DB 3 requests per 10 mins).
     """
     permission_classes = [AllowAny]
+    throttle_classes = [OTPRateThrottle]
 
     def post(self, request):
         serializer = SendOTPSerializer(data=request.data)
@@ -109,6 +113,7 @@ class SendFarmerOTPView(APIView):
         ).count()
 
         if recent_requests_count >= 3:
+            logger.warning(f"[OTP RATE LIMIT] Phone +91-{clean_phone} exceeded limit (3 in 10 mins)")
             return Response({
                 "status": "error",
                 "detail": "Rate limit exceeded. Maximum 3 OTP requests allowed per 10 minutes. Please wait before trying again.",
@@ -118,11 +123,11 @@ class SendFarmerOTPView(APIView):
         # Generate 6-digit OTP
         otp_code = f"{random.randint(100000, 999999)}"
         OTPRecord.objects.create(phone=clean_phone, otp_code=otp_code)
+        logger.info(f"[OTP CREATED] 6-digit code generated for +91-{clean_phone}")
 
         # -------------------------------------------------------------
-        # Console & Log Output (Visible during manual & team testing)
-        # -------------------------------------------------------------
         # Real Fast2SMS Gateway Integration with Console Fallback
+        # -------------------------------------------------------------
         from notifications.services import send_sms
         sms_message = f"Your KisanSlot verification OTP is {otp_code}. Valid for 5 minutes. Do not share with anyone."
         sms_result = send_sms(clean_phone, sms_message, otp_code=otp_code)
@@ -130,16 +135,10 @@ class SendFarmerOTPView(APIView):
         if sms_result.get("success"):
             logger.info(f"[FAST2SMS LIVE DISPATCH] OTP successfully transmitted to +91-{clean_phone}")
         else:
-            # Fallback ONLY if API call fails or key is missing
             fallback_banner = (
-                "\n" + "=" * 64 + "\n"
-                f" [FAST2SMS FALLBACK] Status: {sms_result.get('error', 'Unconfigured')}\n"
-                f" [DEMO OTP] Mobile: +91-{clean_phone} | Code: {otp_code}\n"
-                f" [VALIDITY] 5 Minutes (Expires at: {(timezone.now() + timedelta(minutes=5)).strftime('%H:%M:%S')})\n"
-                + "=" * 64 + "\n"
+                f"[FAST2SMS FALLBACK] Console OTP for +91-{clean_phone}: {otp_code} (Valid 5 mins)"
             )
-            print(fallback_banner)
-            logger.warning(f"[FAST2SMS FALLBACK] Console OTP for {clean_phone}: {otp_code}")
+            logger.warning(fallback_banner)
 
         is_registered = Farmer.objects.filter(phone_number=clean_phone).exists()
 
@@ -194,12 +193,14 @@ class VerifyFarmerOTPView(APIView):
             ).exists()
 
             if expired_exists:
+                logger.warning(f"[OTP EXPIRED] Expired OTP entered for mobile +91-{clean_phone}")
                 return Response({
                     "status": "error",
                     "detail": "OTP has expired. Please request a new OTP.",
                     "message": "OTP has expired. Please request a new OTP."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
+            logger.warning(f"[OTP INVALID] Invalid OTP entered for mobile +91-{clean_phone}")
             return Response({
                 "status": "error",
                 "detail": "Invalid OTP. Please enter the correct 6-digit code.",
@@ -209,6 +210,8 @@ class VerifyFarmerOTPView(APIView):
         if valid_record:
             valid_record.is_verified = True
             valid_record.save(update_fields=['is_verified'])
+
+        logger.info(f"[OTP VERIFIED] Mobile +91-{clean_phone} verified code successfully (master={is_master_otp})")
 
         # Login or Create Farmer
         farmer = Farmer.objects.filter(phone_number=clean_phone).first()
@@ -323,9 +326,10 @@ class RegisterFarmerView(APIView):
 class StaffLoginView(APIView):
     """
     Endpoint: POST /api/accounts/staff/login/
-    Authenticates Centre Operators, Officers, and Admins.
+    Authenticates Centre Operators, Officers, and Admins with LoginRateThrottle protection.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         serializer = StaffLoginSerializer(data=request.data)
@@ -340,6 +344,7 @@ class StaffLoginView(APIView):
             user = authenticate(request, phone_number=username, password=password)
 
         if user is None:
+            logger.warning(f"[STAFF LOGIN FAILED] Invalid credentials attempted for username: {username}")
             return Response({
                 "status": "error",
                 "detail": "Invalid staff credentials. Please check your username and password.",
@@ -349,6 +354,8 @@ class StaffLoginView(APIView):
         tokens = get_tokens_for_user(user)
         is_operator = hasattr(user, 'centre_operator') and user.centre_operator.is_active
         role = "centre_operator" if is_operator else ("admin" if user.is_superuser else "staff")
+
+        logger.info(f"[STAFF LOGIN SUCCESS] User {user.phone_number} logged in with role: {role}")
 
         user_data = {
             "id": user.id,

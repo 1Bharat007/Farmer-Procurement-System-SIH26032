@@ -83,13 +83,76 @@ const API_BASE_URL =
 export class ApiError extends Error {
   status: number;
   data?: any;
+  isNetworkError: boolean;
+  isServerError: boolean;
+  isRateLimit: boolean;
 
-  constructor(message: string, status: number, data?: any) {
+  constructor(message: string, status: number, data?: any, isNetworkError: boolean = false) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.data = data;
+    this.isNetworkError = isNetworkError || status === 0;
+    this.isServerError = status >= 500;
+    this.isRateLimit = status === 429;
   }
+}
+
+export function getFriendlyErrorMessage(err: unknown, defaultMessage = 'An unexpected error occurred'): string {
+  if (err instanceof ApiError) {
+    if (err.isNetworkError) {
+      return 'Network connection lost. Please check your Wi-Fi or data connection and try again.';
+    }
+    if (err.isRateLimit) {
+      return 'Too many requests. Please wait a moment before trying again.';
+    }
+    if (err.isServerError) {
+      return 'The server encountered a temporary error. Please try again in a few moments.';
+    }
+    return err.message || defaultMessage;
+  }
+  if (err instanceof Error) {
+    if (err.name === 'TypeError' || err.message.toLowerCase().includes('fetch')) {
+      return 'Unable to reach the server. Please check your internet connection.';
+    }
+    return err.message || defaultMessage;
+  }
+  return defaultMessage;
+}
+
+function extractErrorMessage(data: any, status: number): string {
+  if (!data) return `Request failed with status ${status}`;
+  if (typeof data === 'string') return data;
+  if (data.error && typeof data.error === 'string') return data.error;
+  if (data.message && typeof data.message === 'string') return data.message;
+  if (data.detail && typeof data.detail === 'string') return data.detail;
+  if (data.slot) {
+    return Array.isArray(data.slot) ? data.slot[0] : String(data.slot);
+  }
+  if (data.phone_number) {
+    return Array.isArray(data.phone_number) ? data.phone_number[0] : String(data.phone_number);
+  }
+  if (data.phone) {
+    return Array.isArray(data.phone) ? data.phone[0] : String(data.phone);
+  }
+  if (data.otp) {
+    return Array.isArray(data.otp) ? data.otp[0] : String(data.otp);
+  }
+  if (data.non_field_errors) {
+    return Array.isArray(data.non_field_errors) ? data.non_field_errors[0] : String(data.non_field_errors);
+  }
+  if (typeof data === 'object') {
+    for (const key of Object.keys(data)) {
+      const val = data[key];
+      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'string') {
+        return `${key.replace('_', ' ')}: ${val[0]}`;
+      }
+      if (typeof val === 'string') {
+        return `${key.replace('_', ' ')}: ${val}`;
+      }
+    }
+  }
+  return `API request failed (${status})`;
 }
 
 // Token helper utilities for client side
@@ -178,20 +241,12 @@ async function request<T>(
     const data = isJson ? await response.json() : await response.text();
 
     if (!response.ok) {
-      const msg =
-        typeof data === 'object' && data !== null
-          ? data.message ||
-            data.detail ||
-            (data.phone ? data.phone[0] : null) ||
-            (data.phone_number ? data.phone_number[0] : null) ||
-            (data.otp ? data.otp[0] : null) ||
-            (data.non_field_errors ? data.non_field_errors[0] : null) ||
-            JSON.stringify(data)
-          : String(data);
+      const msg = extractErrorMessage(data, response.status);
       throw new ApiError(
-        msg || `API request failed with status ${response.status}`,
+        msg,
         response.status,
-        data
+        data,
+        false
       );
     }
 
@@ -200,10 +255,21 @@ async function request<T>(
     if (error instanceof ApiError) {
       throw error;
     }
+    const isOffline = typeof window !== 'undefined' && !window.navigator.onLine;
+    const isFetchErr =
+      error instanceof TypeError ||
+      (error?.message && error.message.toLowerCase().includes('fetch')) ||
+      (error?.message && error.message.toLowerCase().includes('network'));
+
+    const networkMsg = isOffline
+      ? 'No internet connection detected. Please verify your connection.'
+      : 'Unable to reach the server. Please check your network connection or try again shortly.';
+
     throw new ApiError(
-      error.message || 'Failed to connect to backend service',
+      isFetchErr || isOffline ? networkMsg : (error?.message || 'Failed to connect to backend service'),
       0,
-      null
+      null,
+      true
     );
   }
 }
@@ -266,6 +332,10 @@ export const apiClient = {
       return request<any>(`/api/centres/${q ? '?' + q : ''}`);
     },
     retrieve: (id: number) => request<any>(`/api/centres/${id}/`),
+    getAnalytics: (id: number, date?: string) => {
+      const q = date ? `?date=${encodeURIComponent(date)}` : '';
+      return request<any>(`/api/centres/${id}/analytics/${q}`);
+    },
   },
 
   // Slots

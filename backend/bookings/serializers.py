@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 from .models import Slot, Booking, PaymentStatus
 from centres.models import ProcurementCentre
@@ -99,14 +100,5 @@ class BookingSerializer(serializers.ModelSerializer):
         }
 
     def create(self, validated_data):
-        # Auto-increment slot booked count
-        slot = validated_data.get('slot')
-        if slot and slot.is_full:
-            raise serializers.ValidationError({"slot": "This slot has reached its maximum capacity."})
+        return super().create(validated_data)
 
-        booking = super().create(validated_data)
-        if slot:
-            slot.booked_count += 1
-            slot.save(update_fields=['booked_count'])
-
-        return booking

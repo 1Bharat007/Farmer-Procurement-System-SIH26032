@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiClient, authStorage } from "@/lib/api";
+import { apiClient, authStorage, getFriendlyErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, Loader2 } from "lucide
 
 export default function FarmerLoginPage() {
   const router = useRouter();
-  const [locale, setLocale] = React.useState<"en" | "hi">("en");
+  const [locale, setLocale] = React.useState<"en" | "hi" | "pa">("en");
 
   // Login form states
   const [phone, setPhone] = React.useState("");
@@ -87,6 +87,31 @@ export default function FarmerLoginPage() {
       cropLabel: "मुख्य फसल का प्रकार",
       registerBtn: "पंजीकरण पूर्ण कर लॉगिन करें",
     },
+    pa: {
+      appName: "ਕਿਸਾਨਸਲਾਟ",
+      backHome: "ਮੁੱਖ ਪੰਨੇ 'ਤੇ ਵਾਪਸ ਜਾਓ",
+      title: "ਕਿਸਾਨ ਲੌਗਇਨ",
+      subtitle: "ਤਸਦੀਕ ਓਟੀਪੀ ਪ੍ਰਾਪਤ ਕਰਨ ਲਈ ਆਪਣਾ ਰਜਿਸਟਰਡ ਮੋਬਾਈਲ ਨੰਬਰ ਦਾਖਲ ਕਰੋ।",
+      phoneLabel: "ਮੋਬਾਈਲ ਨੰਬਰ",
+      phonePlaceholder: "10-ਅੰਕੀ ਮੋਬਾਈਲ ਨੰਬਰ (ਜਿਵੇਂ 9876543210)",
+      sendOtpBtn: "ਓਟੀਪੀ ਭੇਜੋ",
+      otpLabel: "6-ਅੰਕੀ ਓਟੀਪੀ ਦਾਖਲ ਕਰੋ",
+      otpPlaceholder: "6-ਅੰਕੀ ਓਟੀਪੀ ਕੋਡ",
+      otpSentMsg: "ਓਟੀਪੀ ਭੇਜਿਆ ਗਿਆ: +91 ",
+      changePhone: "ਨੰਬਰ ਬਦਲੋ",
+      verifyBtn: "ਓਟੀਪੀ ਤਸਦੀਕ ਕਰਕੇ ਲੌਗਇਨ ਕਰੋ",
+      resendOtp: "ਓਟੀਪੀ ਮੁੜ ਭੇਜੋ",
+      newFarmerPrompt: "ਨਵੇਂ ਕਿਸਾਨ ਹੋ?",
+      registerLink: "ਇੱਥੇ ਰਜਿਸਟਰ ਕਰੋ",
+      hideRegister: "ਲੌਗਇਨ 'ਤੇ ਵਾਪਸ ਜਾਓ",
+      registerTitle: "ਕਿਸਾਨ ਤੇਜ਼ ਰਜਿਸਟ੍ਰੇਸ਼ਨ",
+      fullNameLabel: "ਪੂਰਾ ਨਾਮ (ਆਧਾਰ ਅਨੁਸਾਰ)",
+      villageLabel: "ਪਿੰਡ",
+      districtLabel: "ਜ਼ਿਲ੍ਹਾ",
+      stateLabel: "ਰਾਜ",
+      cropLabel: "ਮੁੱਖ ਫ਼ਸਲ",
+      registerBtn: "ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਪੂਰੀ ਕਰੋ ਅਤੇ ਲੌਗਇਨ ਕਰੋ",
+    },
   }[locale];
 
   // Send OTP handler
@@ -111,18 +136,26 @@ export default function FarmerLoginPage() {
         setDevOtpHint(res.dev_otp);
       }
     } catch (err: any) {
-      let errorMsg =
-        err.message ||
-        (locale === "en"
-          ? "Failed to send OTP. Please try again."
-          : "ओटीपी भेजने में विफल। पुनः प्रयास करें।");
-      if (err.status === 429) {
-        errorMsg =
+      if (err.isNetworkError) {
+        setError(
+          locale === "en"
+            ? "No network connection. Please check your internet connection and try again."
+            : "कोई इंटरनेट कनेक्शन नहीं है। कृपया अपना नेटवर्क जांचें।"
+        );
+      } else if (err.status === 429) {
+        setError(
           locale === "en"
             ? "Rate limit exceeded. Maximum 3 OTP requests allowed per 10 minutes. Please wait before trying again."
-            : "ओटीपी अनुरोध सीमा समाप्त। 10 मिनट में अधिकतम 3 अनुरोध मान्य हैं। कृपया प्रतीक्षा करें।";
+            : "ओटीपी अनुरोध सीमा समाप्त। 10 मिनट में अधिकतम 3 अनुरोध मान्य हैं। कृपया प्रतीक्षा करें।"
+        );
+      } else {
+        setError(
+          getFriendlyErrorMessage(
+            err,
+            locale === "en" ? "Failed to send OTP. Please try again." : "ओटीपी भेजने में विफल। पुनः प्रयास करें।"
+          )
+        );
       }
-      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -166,15 +199,20 @@ export default function FarmerLoginPage() {
       authStorage.saveTokens(res.tokens || res, res.user);
       router.push("/farmer");
     } catch (err: any) {
-      let errorMsg =
-        err.message ||
-        (locale === "en"
-          ? "Invalid or expired OTP."
-          : "अमान्य या समाप्त ओटीपी।");
-      if (err.data?.detail) {
-        errorMsg = err.data.detail;
+      if (err.isNetworkError) {
+        setError(
+          locale === "en"
+            ? "No network connection. Please check your internet connection and try again."
+            : "कोई इंटरनेट कनेक्शन नहीं है। कृपया अपना नेटवर्क जांचें।"
+        );
+      } else {
+        setError(
+          getFriendlyErrorMessage(
+            err,
+            locale === "en" ? "Invalid or expired OTP." : "अमान्य या समाप्त ओटीपी।"
+          )
+        );
       }
-      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -215,18 +253,26 @@ export default function FarmerLoginPage() {
       // 2. Transition back to OTP verification view with registration fields preserved for the verify-otp call
       setShowRegister(false);
     } catch (err: any) {
-      let errorMsg =
-        err.message ||
-        (locale === "en"
-          ? "Failed to send OTP. Please try again."
-          : "ओटीपी भेजने में विफल। पुनः प्रयास करें।");
-      if (err.status === 429) {
-        errorMsg =
+      if (err.isNetworkError) {
+        setRegError(
+          locale === "en"
+            ? "No network connection. Please check your internet connection and try again."
+            : "कोई इंटरनेट कनेक्शन नहीं है। कृपया अपना नेटवर्क जांचें।"
+        );
+      } else if (err.status === 429) {
+        setRegError(
           locale === "en"
             ? "Rate limit exceeded. Maximum 3 OTP requests allowed per 10 minutes. Please wait before trying again."
-            : "ओटीपी अनुरोध सीमा समाप्त। 10 मिनट में अधिकतम 3 अनुरोध मान्य हैं। कृपया प्रतीक्षा करें।";
+            : "ओटीपी अनुरोध सीमा समाप्त। 10 मिनट में अधिकतम 3 अनुरोध मान्य हैं। कृपया प्रतीक्षा करें।"
+        );
+      } else {
+        setRegError(
+          getFriendlyErrorMessage(
+            err,
+            locale === "en" ? "Failed to send OTP. Please try again." : "ओटीपी भेजने में विफल। पुनः प्रयास करें।"
+          )
+        );
       }
-      setRegError(errorMsg);
     } finally {
       setRegLoading(false);
     }
