@@ -1,4 +1,4 @@
-# 🌾 KisanSlot: Farmer Procurement Queue & Slot Scheduling Platform
+#  KisanSlot: Farmer Procurement Queue & Slot Scheduling Platform
 
 > **Digital queue and slot management system for agricultural procurement centres to eliminate physical wait times and optimize MSP grain intake (Smart India Hackathon 2026 • PS 26032).**
 
@@ -12,7 +12,7 @@
 
 ---
 
-## 📌 Problem Statement (SIH 2026 • PS 26032)
+##  Problem Statement (SIH 2026 • PS 26032)
 
 * **Problem Statement ID**: 26032 (SIH 2026)
 * **Organization**: Ministry of Consumer Affairs, Food & Public Distribution
@@ -37,7 +37,7 @@ During peak harvest and marketing seasons (Rabi & Kharif), millions of Indian fa
 
 ---
 
-## ⚡ Tech Stack
+##  Tech Stack
 
 * **Backend Framework**: Django 5.1 & Django REST Framework (DRF)
 * **Real-Time Communication**: Django Channels (WebSockets) with Daphne ASGI server
@@ -54,7 +54,7 @@ During peak harvest and marketing seasons (Rabi & Kharif), millions of Indian fa
 
 ---
 
-## 🚀 Working Features (Current Implementation)
+##  Working Features (Current Implementation)
 
 All features listed below are fully implemented, verified, and active in the codebase:
 
@@ -86,9 +86,9 @@ All features listed below are fully implemented, verified, and active in the cod
 
 ---
 
-## 🔄 User Workflows
+##  User Workflows
 
-### 🧑‍🌾 Farmer Workflow
+###  Farmer Workflow
 
 ```mermaid
 sequenceDiagram
@@ -142,7 +142,7 @@ sequenceDiagram
 
 ---
 
-### 🏢 Centre Operator / Admin Workflow
+###  Centre Operator / Admin Workflow
 
 ```mermaid
 sequenceDiagram
@@ -198,7 +198,7 @@ sequenceDiagram
 
 ---
 
-## 🏗️ System Architecture
+##  System Architecture
 
 ```mermaid
 flowchart TD
@@ -257,7 +257,7 @@ flowchart TD
 
 ---
 
-## 🛠️ Setup & Running Instructions
+##  Setup & Running Instructions
 
 ### Option 1: Quickstart with Docker Compose (Recommended)
 
@@ -311,7 +311,7 @@ npm run dev
 
 ---
 
-## 🌐 Service Access Points & Demo Credentials
+## Service Access Points & Demo Credentials
 
 | Service | Local URL | Description |
 | :--- | :--- | :--- |
@@ -354,7 +354,7 @@ npm run dev
 
 ---
 
-## 👥 SIH 2026 Team & Contributors
+##  SIH 2026 Team & Contributors
 
 Developed for **Smart India Hackathon 2026** under Problem Statement **26032**:
 * **Team**: KisanSlot Platform Team
@@ -363,6 +363,6 @@ Developed for **Smart India Hackathon 2026** under Problem Statement **26032**:
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the [MIT License](LICENSE) — see the [LICENSE](LICENSE) file for complete details.
