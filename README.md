@@ -54,7 +54,7 @@ During peak harvest and marketing seasons (Rabi & Kharif), millions of Indian fa
 
 ---
 
-##  Working Features (Current Implementation)
+## Working Features (Current Implementation)
 
 All features listed below are fully implemented, verified, and active in the codebase:
 
@@ -86,9 +86,9 @@ All features listed below are fully implemented, verified, and active in the cod
 
 ---
 
-##  User Workflows
+## User Workflows
 
-###  Farmer Workflow
+### Farmer Workflow
 
 ```mermaid
 sequenceDiagram
@@ -142,7 +142,7 @@ sequenceDiagram
 
 ---
 
-###  Centre Operator / Admin Workflow
+### Centre Operator / Admin Workflow
 
 ```mermaid
 sequenceDiagram
@@ -198,7 +198,7 @@ sequenceDiagram
 
 ---
 
-##  System Architecture
+## System Architecture
 
 ```mermaid
 flowchart TD
@@ -257,7 +257,7 @@ flowchart TD
 
 ---
 
-##  Setup & Running Instructions
+## Setup & Running Instructions
 
 ### Option 1: Quickstart with Docker Compose (Recommended)
 
@@ -266,8 +266,8 @@ flowchart TD
 
 #### 1. Clone the repository and initialize environment variables
 ```bash
-git clone https://github.com/1Bharat007/Farmer-Procurement-System-PS-number---26032-SIH-26.git
-cd Farmer-Procurement-System-PS-number---26032-SIH-26
+git clone https://github.com/1Bharat007/Farmer-Procurement-System-SIH26032.git
+cd Farmer-Procurement-System-SIH26032
 cp .env.example .env
 ```
 
@@ -311,7 +311,27 @@ npm run dev
 
 ---
 
-## Service Access Points & Demo Credentials
+### Option 3: Production Server Deployment (Render.com Blueprint with Live Redis & PostgreSQL)
+
+The repository includes a ready-to-deploy [`render.yaml`](render.yaml) blueprint that spins up all production services in the cloud:
+
+1. **Managed PostgreSQL 16**: Auto-provisioned database (`kisanslot-db`) with connection pooling.
+2. **Managed Redis 7**: Live in-memory Redis instance (`kisanslot-redis`) powering Celery async task queue and Django Channels WebSocket layer.
+3. **ASGI Web Service**: Daphne-backed Django backend running HTTP and WebSockets.
+4. **Celery Worker Service**: Dedicated worker running async Fast2SMS SMS dispatch and notifications.
+5. **Next.js Web Service**: Optimized production frontend build pointing to the cloud backend.
+
+#### One-Click Deployment Steps:
+1. Log into [Render.com](https://render.com) using your GitHub account.
+2. Click **New +** → **Blueprint**.
+3. Connect your repository: `1Bharat007/Farmer-Procurement-System-SIH26032`.
+4. Render detects [`render.yaml`](render.yaml) and automatically creates and connects the database, Redis instance, worker, backend, and frontend.
+5. In the Render Dashboard, add your optional `FAST2SMS_API_KEY` under Environment variables.
+6. Your platform is now fully live on cloud servers!
+
+---
+
+##  Service Access Points & Demo Credentials
 
 | Service | Local URL | Description |
 | :--- | :--- | :--- |
@@ -331,7 +351,7 @@ npm run dev
 
 ---
 
-## 🔌 API Documentation
+## API Documentation
 
 | Module | Method | Endpoint | Description | Auth Required |
 | :--- | :---: | :--- | :--- | :---: |

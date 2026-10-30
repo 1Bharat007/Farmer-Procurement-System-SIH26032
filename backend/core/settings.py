@@ -8,7 +8,10 @@ Ministry of Consumer Affairs, Food & Public Distribution
 
 from datetime import timedelta
 from pathlib import Path
-import dj_database_url
+try:
+    import dj_database_url
+except ImportError:
+    dj_database_url = None
 from decouple import config, Csv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
