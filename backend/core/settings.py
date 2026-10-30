@@ -8,6 +8,7 @@ Ministry of Consumer Affairs, Food & Public Distribution
 
 from datetime import timedelta
 from pathlib import Path
+import dj_database_url
 from decouple import config, Csv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -64,6 +65,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',   # serves static files on Render
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -94,35 +96,41 @@ WSGI_APPLICATION = 'core.wsgi.application'
 ASGI_APPLICATION = 'core.asgi.application'
 
 # Database
-# PostgreSQL configuration for Docker / Production with SQLite local development support
+# Priority order:
+#   1. DATABASE_URL env var — injected automatically by Render (production)
+#   2. USE_SQLITE=True      — lightweight local dev without PostgreSQL
+#   3. Individual DB_* vars — Docker Compose or manual PostgreSQL
 USE_SQLITE = config('USE_SQLITE', default=False, cast=bool)
-DB_ENGINE = config('DB_ENGINE', default='sqlite3' if USE_SQLITE else 'postgresql')
+DATABASE_URL = config('DATABASE_URL', default='')
 
-if DB_ENGINE == 'sqlite3' or USE_SQLITE:
+if DATABASE_URL:
+    # Render (and Railway/Heroku) inject a full postgres:// connection string.
+    # dj_database_url parses it into the Django DATABASES dict format.
+    DATABASES = {
+        'default': dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+elif USE_SQLITE:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
-            'OPTIONS': {
-                'timeout': 20,
-            },
+            'OPTIONS': {'timeout': 20},
         }
     }
 else:
-    DB_NAME = config('DB_NAME', default='kisan_procure_db')
-    DB_USER = config('DB_USER', default='kisan_user')
-    DB_PASSWORD = config('DB_PASSWORD', default='kisan_password_sih2026')
-    DB_HOST = config('DB_HOST', default='postgres')
-    DB_PORT = config('DB_PORT', default='5432')
-
+    # Docker Compose / manual PostgreSQL via individual env vars
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': DB_NAME,
-            'USER': DB_USER,
-            'PASSWORD': DB_PASSWORD,
-            'HOST': DB_HOST,
-            'PORT': DB_PORT,
+            'NAME': config('DB_NAME', default='kisan_procure_db'),
+            'USER': config('DB_USER', default='kisan_user'),
+            'PASSWORD': config('DB_PASSWORD', default='kisan_password_sih2026'),
+            'HOST': config('DB_HOST', default='postgres'),
+            'PORT': config('DB_PORT', default='5432'),
         }
     }
 
@@ -168,6 +176,8 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+# WhiteNoise compressed storage for production (Render)
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -230,9 +240,19 @@ CORS_ALLOWED_ORIGINS = config(
 CORS_ALLOW_CREDENTIALS = True
 
 # Redis & Channels Configuration
-REDIS_HOST = config('REDIS_HOST', default='redis')
+# REDIS_URL is injected by Render as rediss://... (TLS) in production,
+# or redis://127.0.0.1:6379/0 for local/Docker.
+REDIS_HOST = config('REDIS_HOST', default='127.0.0.1')
 REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
 REDIS_URL = config('REDIS_URL', default=f'redis://{REDIS_HOST}:{REDIS_PORT}/0')
+
+# Render's managed Redis uses TLS (rediss://). channels-redis needs
+# ssl_cert_reqs=None to accept Render's self-signed internal certificate.
+_REDIS_IS_TLS = REDIS_URL.startswith('rediss://')
+_CHANNELS_REDIS_CONFIG = {'address': REDIS_URL}
+if _REDIS_IS_TLS:
+    import ssl as _ssl
+    _CHANNELS_REDIS_CONFIG['ssl_cert_reqs'] = _ssl.CERT_NONE
 
 if config('USE_INMEMORY_CHANNELS', default=False, cast=bool):
     CHANNEL_LAYERS = {
@@ -244,9 +264,7 @@ else:
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {
-                'hosts': [REDIS_URL],
-            },
+            'CONFIG': _CHANNELS_REDIS_CONFIG,
         },
     }
 

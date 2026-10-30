@@ -1,0 +1,130 @@
+# render.yaml — KisanSlot Platform Infrastructure Blueprint
+# Smart India Hackathon 2026 • Problem Statement 26032
+# Ministry of Consumer Affairs, Food & Public Distribution
+#
+# DEPLOY INSTRUCTIONS (one-time, ~5 minutes):
+# 1. Go to https://render.com and sign in with GitHub
+# 2. Click "New" → "Blueprint"
+# 3. Select the repo: 1Bharat007/Farmer-Procurement-System-SIH26032
+# 4. Render reads this file and creates all 5 services automatically
+# 5. After first deploy, set these secret environment variables in the
+#    Render Dashboard → each service → Environment:
+#      - SECRET_KEY         (any long random string, e.g. openssl rand -hex 32)
+#      - FAST2SMS_API_KEY   (your Fast2SMS API key, or leave blank for console fallback)
+# 6. Done — all services are live with real Redis, PostgreSQL, and WebSockets.
+
+databases:
+  # ─── Managed PostgreSQL 16 ────────────────────────────────────────────────
+  - name: kisanslot-db
+    plan: free
+    databaseName: kisan_procure_db
+    user: kisan_user
+
+services:
+  # ─── Managed Redis 7 (Celery broker + Django Channels layer) ─────────────
+  - type: redis
+    name: kisanslot-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+
+  # ─── Django Backend (Daphne ASGI — HTTP + WebSockets) ────────────────────
+  - type: web
+    name: kisanslot-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: "./build.sh"
+    startCommand: "daphne -b 0.0.0.0 -p $PORT core.asgi:application"
+    envVars:
+      # Injected automatically by Render from the services above
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kisanslot-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: kisanslot-redis
+          property: connectionString
+      # Django core
+      - key: SECRET_KEY
+        generateValue: true   # auto-generated on first deploy; override in Dashboard
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com,localhost,127.0.0.1"
+      - key: USE_SQLITE
+        value: "False"
+      - key: USE_INMEMORY_CHANNELS
+        value: "False"
+      - key: CELERY_ALWAYS_EAGER
+        value: "False"          # Real async tasks — uses live Redis broker
+      # CORS: updated automatically after frontend deploys (set manually after first deploy)
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://kisanslot-frontend.onrender.com,http://localhost:3000"
+      # Fast2SMS (set your real key in Render Dashboard → Environment)
+      - key: FAST2SMS_API_KEY
+        value: ""
+      - key: FAST2SMS_SENDER_ID
+        value: "FSTSMS"
+      # Python path
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+    healthCheckPath: /api/health/
+
+  # ─── Celery Worker (async SMS + notifications) ────────────────────────────
+  - type: worker
+    name: kisanslot-celery-worker
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A core worker -l info --concurrency=2"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kisanslot-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: kisanslot-redis
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: kisanslot-backend
+          envVarKey: SECRET_KEY
+      - key: DEBUG
+        value: "False"
+      - key: USE_SQLITE
+        value: "False"
+      - key: USE_INMEMORY_CHANNELS
+        value: "False"
+      - key: CELERY_ALWAYS_EAGER
+        value: "False"
+      - key: FAST2SMS_API_KEY
+        value: ""
+      - key: FAST2SMS_SENDER_ID
+        value: "FSTSMS"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+  # ─── Next.js Frontend ─────────────────────────────────────────────────────
+  - type: web
+    name: kisanslot-frontend
+    runtime: node
+    plan: free
+    rootDir: frontend
+    buildCommand: "./build.sh"
+    startCommand: "npm start"
+    envVars:
+      # Points the browser to the live Render backend URL
+      - key: NEXT_PUBLIC_API_URL
+        value: "https://kisanslot-backend.onrender.com"
+      - key: NODE_ENV
+        value: "production"
+      - key: PORT
+        value: "3000"
